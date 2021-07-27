@@ -86,7 +86,6 @@ namespace SharpNES
             cpu.RunWithCallback((_cpu, code, opcode) =>
             {
                 window.DispatchEvents();
-                Console.WriteLine($"0x{BitConverter.ToString(new byte[] { code })} {opcode.mnemonic}");
                 if (last_key != null)
                 {
                     // Handle key
@@ -120,7 +119,6 @@ namespace SharpNES
                     window.Draw(sprite);
                     window.Display();
                 }
-                Thread.Sleep(1000/1790);
             });
         }
     }

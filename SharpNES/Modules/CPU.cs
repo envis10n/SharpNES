@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 
 namespace SharpNES.Modules
 {
@@ -895,6 +896,7 @@ namespace SharpNES.Modules
                 {
                     throw new Exception($"OpCode {code} is not recognized.");
                 }
+                Thread.Sleep(1000 / 1790);
             }
         }
     }
