@@ -9,4 +9,10 @@
     <PackageReference Include="SFML.Net" Version="2.5.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="snake.nes">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

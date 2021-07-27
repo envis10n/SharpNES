@@ -9,6 +9,7 @@ namespace SharpNES
     using Modules;
     class Program
     {
+        static float GAME_SCALE = 20.0f;
         static byte[] GAME_CODE = new byte[] {
             0x20, 0x06, 0x06, 0x20, 0x38, 0x06, 0x20, 0x0d, 0x06, 0x20, 0x2a, 0x06, 0x60, 0xa9, 0x02,
             0x85, 0x02, 0xa9, 0x04, 0x85, 0x03, 0xa9, 0x11, 0x85, 0x10, 0xa9, 0x10, 0x85, 0x12, 0xa9,
@@ -79,14 +80,14 @@ namespace SharpNES
         }
         static void Main(string[] args)
         {
-            RenderWindow window = new RenderWindow(new VideoMode(32 * 10, 32 * 10), "Snake Game");
+            RenderWindow window = new RenderWindow(new VideoMode(32 * (uint)GAME_SCALE, 32 * (uint)GAME_SCALE), "Snake Game");
             Random rand = new Random();
 
             byte[] screen_state = new byte[32 * 4 * 32];
 
             Texture texture = new Texture(32, 32);
             Sprite sprite = new Sprite(texture);
-            sprite.Scale = new Vector2f(10.0f, 10.0f);
+            sprite.Scale = new Vector2f(GAME_SCALE, GAME_SCALE);
             Keyboard.Key? last_key = null;
 
             window.KeyPressed += (sender, args) =>
@@ -94,8 +95,15 @@ namespace SharpNES
                 last_key = args.Code;
             };
 
-            CPU cpu = new CPU();
-            cpu.Load(GAME_CODE);
+            window.Closed += (sender, args) =>
+            {
+                Environment.Exit(0);
+            };
+
+            byte[] raw_cart = System.IO.File.ReadAllBytes("snake.nes");
+            Rom rom = new Rom(raw_cart);
+            Bus bus = new Bus(rom);
+            CPU cpu = new CPU(bus);
             cpu.Reset();
 
             cpu.RunWithCallback((_cpu, code, opcode) =>
@@ -127,7 +135,7 @@ namespace SharpNES
                 }
                 byte rng = (byte)rand.Next(1, 16);
                 _cpu.MemWrite(0xfe, rng);
-                
+
                 if (ReadScreenState(_cpu, screen_state))
                 {
                     window.Clear();
@@ -135,7 +143,6 @@ namespace SharpNES
                     window.Draw(sprite);
                     window.Display();
                 }
-
                 Thread.Sleep(1000/1790);
             });
         }

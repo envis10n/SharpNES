@@ -29,10 +29,10 @@ namespace SharpNES.Modules
         public byte stack_pointer = STACK_RESET;
         public CpuFlags status = (CpuFlags)0b100100;
         public ushort program_counter = 0;
-        private byte[] memory = new byte[0xffff];
-        public CPU()
+        public Bus bus;
+        public CPU(Bus _bus)
         {
-            //
+            bus = _bus;
         }
         private ushort GetOperandAddress(AddressingMode mode)
         {
@@ -90,19 +90,19 @@ namespace SharpNES.Modules
         }
         public byte MemRead(ushort addr)
         {
-            return memory[addr];
+            return bus.MemRead(addr);
         }
         public void MemWrite(ushort addr, byte data)
         {
-            memory[addr] = data;
+            bus.MemWrite(addr, data);
         }
-        private ushort MemReadShort(ushort addr)
+        public ushort MemReadShort(ushort addr)
         {
             ushort lo = MemRead(addr);
             ushort hi = MemRead((ushort)(addr + 1));
             return (ushort)((ushort)(hi << 8) | lo);
         }
-        private void MemWriteShort(ushort addr, ushort data)
+        public void MemWriteShort(ushort addr, ushort data)
         {
             byte hi = (byte)(data >> 8);
             byte lo = (byte)(data & 0xff);
@@ -116,7 +116,7 @@ namespace SharpNES.Modules
             register_x = 0;
             stack_pointer = STACK_RESET;
             status = (CpuFlags)0b100100;
-            //memory = new byte[0xFFFF];
+            program_counter = MemReadShort(0xFFFC);
         }
         private void SetCarryFlag()
         {
@@ -417,9 +417,12 @@ namespace SharpNES.Modules
         }
         public void Load(byte[] program)
         {
-            Buffer.BlockCopy(program, 0, memory, 0x0600, program.Length);
+            //Buffer.BlockCopy(program, 0, memory, 0x0600, program.Length);
+            for (ushort i = 0; i < program.Length; i++)
+            {
+                MemWrite((ushort)(0x0600 + i), program[i]);
+            }
             MemWriteShort(0xFFFC, 0x0600);
-            program_counter = MemReadShort(0xFFFC);
         }
         private void LDY(AddressingMode mode)
         {
@@ -504,8 +507,8 @@ namespace SharpNES.Modules
         }
         public void LoadAndRun(byte[] program)
         {
-            Reset();
             Load(program);
+            Reset();
             Run();
         }
         public void Run()
