@@ -77,14 +77,20 @@ namespace SharpNES
                 Environment.Exit(0);
             };
 
-            byte[] raw_cart = System.IO.File.ReadAllBytes("snake.nes");
+            byte[] raw_cart = System.IO.File.ReadAllBytes("nestest.nes");
             Rom rom = new Rom(raw_cart);
             Bus bus = new Bus(rom);
             CPU cpu = new CPU(bus);
             cpu.Reset();
+            cpu.program_counter = 0xC000;
+            System.IO.File.Delete("nestest.log");
+            var fs = System.IO.File.AppendText("nestest.log");
 
-            cpu.RunWithCallback((_cpu, code, opcode) =>
+            cpu.RunWithCallback((_cpu) =>
             {
+                var trace = TraceHelper.Trace(_cpu);
+                Console.WriteLine(trace);
+                fs.WriteLine(trace);
                 window.DispatchEvents();
                 if (last_key != null)
                 {
@@ -119,7 +125,10 @@ namespace SharpNES
                     window.Draw(sprite);
                     window.Display();
                 }
+                Thread.Sleep(1000 / 1790);
             });
+            fs.Flush();
+            fs.Close();
         }
     }
 }

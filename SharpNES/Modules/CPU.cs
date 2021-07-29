@@ -3,8 +3,29 @@ using System.Threading;
 
 namespace SharpNES.Modules
 {
+    public enum InterruptType
+    {
+        NMI,
+    }
+    public struct Interrupt
+    {
+        public InterruptType itype { get; set; }
+        public ushort vector_addr { get; set; }
+        public byte b_flag_mask { get; set; }
+        public byte cpu_cycles { get; set; }
+    }
+    public static class Interrupts
+    {
+        public static Interrupt NMI = new Interrupt()
+        {
+            itype = InterruptType.NMI,
+            vector_addr = 0xfffa,
+            b_flag_mask = 0b00100000,
+            cpu_cycles = 2,
+        };
+    }
     [Flags]
-    public enum CpuFlags
+    public enum CpuFlags : byte
     {
         NONE = 0b00000000,
         CARRY = 0b00000001,
@@ -31,41 +52,39 @@ namespace SharpNES.Modules
         {
             bus = _bus;
         }
-        private ushort GetOperandAddress(AddressingMode mode)
+        public ushort GetAbsoluteAddress(AddressingMode mode, ushort addr)
         {
             switch (mode)
             {
-                case AddressingMode.Immediate:
-                    return program_counter;
                 case AddressingMode.ZeroPage:
-                    return MemRead(program_counter);
+                    return MemRead(addr);
                 case AddressingMode.Absolute:
-                    return MemReadShort(program_counter);
+                    return MemReadShort(addr);
                 case AddressingMode.ZeroPage_X:
                     {
-                        byte pos = MemRead(program_counter);
+                        byte pos = MemRead(addr);
                         return (ushort)(pos + register_x);
                     }
                 case AddressingMode.ZeroPage_Y:
                     {
-                        byte pos = MemRead(program_counter);
+                        byte pos = MemRead(addr);
                         return (ushort)(pos + register_y);
                     }
                 case AddressingMode.Absolute_X:
                     {
-                        ushort ba = MemReadShort(program_counter);
+                        ushort ba = MemReadShort(addr);
                         ushort x = register_x;
                         return (ushort)(ba + x);
                     }
                 case AddressingMode.Absolute_Y:
                     {
-                        ushort ba = MemReadShort(program_counter);
+                        ushort ba = MemReadShort(addr);
                         ushort y = register_y;
                         return (ushort)(ba + y);
                     }
                 case AddressingMode.Indirect_X:
                     {
-                        byte ba = MemRead(program_counter);
+                        byte ba = MemRead(addr);
                         byte ptr = (byte)(ba + register_x);
                         ushort lo = MemRead(ptr);
                         ushort hi = MemRead((byte)(ptr + 1));
@@ -73,7 +92,7 @@ namespace SharpNES.Modules
                     }
                 case AddressingMode.Indirect_Y:
                     {
-                        byte ba = MemRead(program_counter);
+                        byte ba = MemRead(addr);
 
                         ushort lo = MemRead(ba);
                         ushort hi = MemRead((byte)(ba + 1));
@@ -83,6 +102,16 @@ namespace SharpNES.Modules
                 case AddressingMode.NoneAddressing:
                 default:
                     throw new Exception("Unused Addressing Mode!");
+            }
+        }
+        public ushort GetOperandAddress(AddressingMode mode)
+        {
+            switch (mode)
+            {
+                case AddressingMode.Immediate:
+                    return program_counter;
+                default:
+                    return GetAbsoluteAddress(mode, program_counter);
             }
         }
         public byte MemRead(ushort addr)
@@ -151,6 +180,22 @@ namespace SharpNES.Modules
             }
 
             SetRegisterA(result);
+        }
+        private void SubFromRegisterA(byte data)
+        {
+            AddToRegisterA((byte)(-data - 1));
+        }
+        private void ANDWithRegisterA(byte data)
+        {
+            SetRegisterA((byte)(data & register_a));
+        }
+        private void XORWithRegisterA(byte data)
+        {
+            SetRegisterA((byte)(data ^ register_a));
+        }
+        private void ORWithRegisterA(byte data)
+        {
+            SetRegisterA((byte)(data | register_a));
         }
         private void SBC(AddressingMode mode)
         {
@@ -502,6 +547,19 @@ namespace SharpNES.Modules
                 status &= ~CpuFlags.NEGATIVE;
             }
         }
+        public void Interrupt(Interrupt interrupt)
+        {
+            StackPushShort(program_counter);
+            CpuFlags flag = status;
+            flag = (CpuFlags)BitMask.Set((byte)flag, (byte)CpuFlags.BREAK, (interrupt.b_flag_mask & 0b010000) == 1);
+            flag = (CpuFlags)BitMask.Set((byte)flag, (byte)CpuFlags.BREAK2, (interrupt.b_flag_mask & 0b100000) == 1);
+
+            StackPush((byte)flag);
+            status = (CpuFlags)BitMask.Set((byte)status, (byte)CpuFlags.INTERRUPT_DISABLE);
+
+            bus.Tick(interrupt.cpu_cycles);
+            program_counter = MemReadShort(interrupt.vector_addr);
+        }
         public void LoadAndRun(byte[] program)
         {
             Load(program);
@@ -510,12 +568,18 @@ namespace SharpNES.Modules
         }
         public void Run()
         {
-            RunWithCallback((_, _, _) => { });
+            RunWithCallback((_) => { });
         }
-        public void RunWithCallback(Action<CPU, byte, OpCode> callback)
+        public void RunWithCallback(Action<CPU> callback)
         {
             while (true)
             {
+                if (bus.PollNMIStatus() != null)
+                {
+                    Console.WriteLine("INTERRUPT NMI");
+                    Interrupt(Interrupts.NMI);
+                }
+                callback(this);
                 byte code = MemRead(program_counter);
                 program_counter++;
                 ushort program_counter_state = program_counter;
@@ -881,22 +945,334 @@ namespace SharpNES.Modules
                                 UpdateZeroAndNegativeFlags(register_a);
                                 break;
                             }
+                        /* Unofficial */
+
+                        /* DCP */
+                        case 0xc7: 
+                        case 0xd7:
+                        case 0xCF:
+                        case 0xdF:
+                        case 0xdb:
+                        case 0xd3:
+                        case 0xc3:
+                            {
+                                ushort addr = GetOperandAddress(opcode.mode);
+                                byte data = MemRead(addr);
+                                data--;
+                                MemWrite(addr, data);
+                                if (data <= register_a)
+                                {
+                                    status |= CpuFlags.CARRY;
+                                }
+                                UpdateZeroAndNegativeFlags((byte)(register_a - 1));
+                                break;
+                            }
+                        /* RLA */
+                        case 0x27: 
+                        case 0x37:
+                        case 0x2F:
+                        case 0x3F:
+                        case 0x3b:
+                        case 0x33:
+                        case 0x23:
+                            {
+                                byte data = ROL(opcode.mode);
+                                ANDWithRegisterA(data);
+                                break;
+                            }
+                        /* SLO */
+                        case 0x07:
+                        case 0x17:
+                        case 0x0F:
+                        case 0x1f:
+                        case 0x1b:
+                        case 0x03:
+                        case 0x13:
+                            {
+                                byte data = ASL(opcode.mode);
+                                ORWithRegisterA(data);
+                                break;
+                            }
+                        /* SRE */
+                        case 0x47:
+                        case 0x57:
+                        case 0x4F:
+                        case 0x5f:
+                        case 0x5b:
+                        case 0x43:
+                        case 0x53:
+                            {
+                                byte data = LSR(opcode.mode);
+                                XORWithRegisterA(data);
+                                break;
+                            }
+                        /* SKB */
+                        case 0x80:
+                        case 0x82:
+                        case 0x89:
+                        case 0xc2:
+                        case 0xe2:
+                            {
+                                // 2 byte NOP Immediate
+                                break;
+                            }
+                        /* AXS */
+                        case 0xCB:
+                            {
+                                ushort addr = GetOperandAddress(opcode.mode);
+                                byte data = MemRead(addr);
+                                byte x_and_a = (byte)(register_x & register_a);
+                                byte result = (byte)(x_and_a - 1);
+
+                                if (data <= x_and_a)
+                                {
+                                    status |= CpuFlags.CARRY;
+                                }
+                                UpdateZeroAndNegativeFlags(result);
+                                register_x = result;
+                                break;
+                            }
+                        /* ARR */
+                        case 0x6B:
+                            {
+                                ushort addr = GetOperandAddress(opcode.mode);
+                                byte data = MemRead(addr);
+                                ANDWithRegisterA(data);
+                                RORAccumulator();
+                                byte result = register_a;
+                                byte bit_5 = (byte)((byte)(result >> 5) & 1);
+                                byte bit_6 = (byte)((byte)(result >> 6) & 1);
+                                if (bit_6 == 1)
+                                {
+                                    status |= CpuFlags.CARRY;
+                                } else
+                                {
+                                    status &= ~CpuFlags.CARRY;
+                                }
+                                if ((byte)(bit_5 ^ bit_6) == 1)
+                                {
+                                    status |= CpuFlags.OVERFLOW;
+                                } else
+                                {
+                                    status &= ~CpuFlags.OVERFLOW;
+                                }
+                                UpdateZeroAndNegativeFlags(result);
+                                break;
+                            }
+                        /* Unofficial SBC */
+                        case 0xeb:
+                            {
+                                ushort addr = GetOperandAddress(opcode.mode);
+                                byte data = MemRead(addr);
+                                SubFromRegisterA(data);
+                                break;
+                            }
+                        /* ANC */
+                        case 0x0b:
+                        case 0x2b:
+                            {
+                                ushort addr = GetOperandAddress(opcode.mode);
+                                byte data = MemRead(addr);
+                                ANDWithRegisterA(data);
+                                if ((byte)(status & CpuFlags.NEGATIVE) != 0)
+                                {
+                                    status |= CpuFlags.CARRY;
+                                } else
+                                {
+                                    status &= ~CpuFlags.CARRY;
+                                }
+                                break;
+                            }
+                        /* ALR */
+                        case 0x4b:
+                            {
+                                ushort addr = GetOperandAddress(opcode.mode);
+                                byte data = MemRead(addr);
+                                ANDWithRegisterA(data);
+                                LSRAccumulator();
+                                break;
+                            }
+                        /* NOP Read */
+                        case 0x04:
+                        case 0x44:
+                        case 0x64:
+                        case 0x14:
+                        case 0x34:
+                        case 0x54:
+                        case 0x74:
+                        case 0xd4:
+                        case 0xf4:
+                        case 0x0c:
+                        case 0x1c:
+                        case 0x3c:
+                        case 0x5c:
+                        case 0x7c:
+                        case 0xdc:
+                        case 0xfc:
+                            {
+                                ushort addr = GetOperandAddress(opcode.mode);
+                                byte data = MemRead(addr);
+                                // DO NOTHING
+                                break;
+                            }
+                        /* RRA */
+                        case 0x67:
+                        case 0x77:
+                        case 0x6f:
+                        case 0x7f:
+                        case 0x7b:
+                        case 0x63:
+                        case 0x73:
+                            {
+                                byte data = ROR(opcode.mode);
+                                AddToRegisterA(data);
+                                break;
+                            }
+                        /* ISB */
+                        case 0xe7:
+                        case 0xf7:
+                        case 0xef:
+                        case 0xff:
+                        case 0xfb:
+                        case 0xe3:
+                        case 0xf3:
+                            {
+                                byte data = INC(opcode.mode);
+                                SubFromRegisterA(data);
+                                break;
+                            }
+                        /* NOPs */
+                        case 0x02:
+                        case 0x12:
+                        case 0x22:
+                        case 0x32:
+                        case 0x42:
+                        case 0x52:
+                        case 0x62:
+                        case 0x72:
+                        case 0x92:
+                        case 0xb2:
+                        case 0xd2:
+                        case 0xf2: 
+                        case 0x1a:
+                        case 0x3a:
+                        case 0x5a:
+                        case 0x7a:
+                        case 0xda:
+                        case 0xfa:
+                            break; // DO NOTHING
+                        /* LAX */
+                        case 0xa7:
+                        case 0xb7:
+                        case 0xaf:
+                        case 0xbf:
+                        case 0xa3:
+                        case 0xb3:
+                            {
+                                ushort addr = GetOperandAddress(opcode.mode);
+                                byte data = MemRead(addr);
+                                SetRegisterA(data);
+                                register_x = register_a;
+                                break;
+                            }
+                        /* SAX */
+                        case 0x87:
+                        case 0x97:
+                        case 0x8f:
+                        case 0x83:
+                            {
+                                byte data = (byte)(register_a & register_x);
+                                ushort addr = GetOperandAddress(opcode.mode);
+                                MemWrite(addr, data);
+                                break;
+                            }
+                        /* LXA */
+                        case 0xab:
+                            {
+                                LDA(opcode.mode);
+                                TAX();
+                                break;
+                            }
+                        /* XAA */
+                        case 0x8b:
+                            {
+                                register_a = register_x;
+                                UpdateZeroAndNegativeFlags(register_a);
+                                ushort addr = GetOperandAddress(opcode.mode);
+                                byte data = MemRead(addr);
+                                ANDWithRegisterA(data);
+                                break;
+                            }
+                        /* LAS */
+                        case 0xbb:
+                            {
+                                ushort addr = GetOperandAddress(opcode.mode);
+                                byte data = MemRead(addr);
+                                data = (byte)(data & stack_pointer);
+                                register_a = data;
+                                register_x = data;
+                                stack_pointer = data;
+                                UpdateZeroAndNegativeFlags(data);
+                                break;
+                            }
+                        /* TAS */
+                        case 0x9b:
+                            {
+                                byte data = (byte)(register_a & register_x);
+                                stack_pointer = data;
+                                ushort mem_address = (ushort)(MemReadShort(program_counter) + register_y);
+                                data = (byte)((byte)((byte)(mem_address >> 8) + 1) & stack_pointer);
+                                MemWrite(mem_address, data);
+                                break;
+                            }
+                        /* AHX Indirect Y */
+                        case 0x93:
+                            {
+                                byte pos = MemRead(program_counter);
+                                ushort mem_address = (ushort)(MemReadShort(pos) + register_y);
+                                byte data = (byte)(register_a & register_x & (byte)(mem_address >> 8));
+                                MemWrite(mem_address, data);
+                                break;
+                            }
+                        /* AHX Absolute Y */
+                        case 0x9f:
+                            {
+                                ushort mem_address = (ushort)(MemReadShort(program_counter) + register_y);
+                                byte data = (byte)(register_a & register_x & (byte)(mem_address >> 8));
+                                MemWrite(mem_address, data);
+                                break;
+                            }
+                        /* SHX */
+                        case 0x9e:
+                            {
+                                ushort mem_address = (ushort)(MemReadShort(program_counter) + register_y);
+                                byte data = (byte)(register_x & (byte)((mem_address >> 8) + 1));
+                                MemWrite(mem_address, data);
+                                break;
+                            }
+                        /* SHY */
+                        case 0x9c:
+                            {
+                                ushort mem_address = (ushort)(MemReadShort(program_counter) + register_x);
+                                byte data = (byte)(register_y & (byte)((mem_address >> 8) + 1));
+                                MemWrite(mem_address, data);
+                                break;
+                            }
                         default:
                             throw new Exception($"OpCode {code} {opcode.mnemonic} NYI");
                     }
+
+                    bus.Tick(opcode.cycles);
 
                     if (program_counter_state == program_counter)
                     {
                         program_counter = (ushort)(program_counter + opcode.len - 1);
                     }
-
-                    callback(this, code, opcode);
                 }
                 else
                 {
                     throw new Exception($"OpCode {code} is not recognized.");
                 }
-                Thread.Sleep(1000 / 1790);
             }
         }
     }

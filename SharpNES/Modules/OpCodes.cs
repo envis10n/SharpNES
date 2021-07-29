@@ -226,6 +226,137 @@ namespace SharpNES.Modules
             {0x68, new OpCode("PLA", 1, 4, AddressingMode.NoneAddressing)},
             {0x08, new OpCode("PHP", 1, 3, AddressingMode.NoneAddressing)},
             {0x28, new OpCode("PLP", 1, 4, AddressingMode.NoneAddressing)},
+
+            /* Unofficial */
+            {0xc7, new OpCode("*DCP", 2, 5, AddressingMode.ZeroPage)},
+            {0xd7, new OpCode("*DCP", 2, 6, AddressingMode.ZeroPage_X)},
+            {0xCF,  new OpCode("*DCP", 3, 6, AddressingMode.Absolute)},
+            {0xdF,  new OpCode("*DCP", 3, 7, AddressingMode.Absolute_X)},
+            {0xdb,  new OpCode("*DCP", 3, 7, AddressingMode.Absolute_Y)},
+            {0xd3,  new OpCode("*DCP", 2, 8, AddressingMode.Indirect_Y)},
+            {0xc3,  new OpCode("*DCP", 2, 8, AddressingMode.Indirect_X)},
+
+
+            {0x27,  new OpCode("*RLA", 2, 5, AddressingMode.ZeroPage)},
+            {0x37,  new OpCode("*RLA", 2, 6, AddressingMode.ZeroPage_X)},
+            {0x2F,  new OpCode("*RLA", 3, 6, AddressingMode.Absolute)},
+            {0x3F,  new OpCode("*RLA", 3, 7, AddressingMode.Absolute_X)},
+            {0x3b,  new OpCode("*RLA", 3, 7, AddressingMode.Absolute_Y)},
+            {0x33,  new OpCode("*RLA", 2, 8, AddressingMode.Indirect_Y)},
+            {0x23,  new OpCode("*RLA", 2, 8, AddressingMode.Indirect_X)},
+
+            {0x07,  new OpCode("*SLO", 2, 5, AddressingMode.ZeroPage)},
+            {0x17,  new OpCode("*SLO", 2, 6, AddressingMode.ZeroPage_X)},
+            {0x0F,  new OpCode("*SLO", 3, 6, AddressingMode.Absolute)},
+            {0x1f,  new OpCode("*SLO", 3, 7, AddressingMode.Absolute_X)},
+            {0x1b,  new OpCode("*SLO", 3, 7, AddressingMode.Absolute_Y)},
+            {0x03,  new OpCode("*SLO", 2, 8, AddressingMode.Indirect_X)},
+            {0x13,  new OpCode("*SLO", 2, 8, AddressingMode.Indirect_Y)},
+
+            {0x47,  new OpCode("*SRE", 2, 5, AddressingMode.ZeroPage)},
+            {0x57,  new OpCode("*SRE", 2, 6, AddressingMode.ZeroPage_X)},
+            {0x4F,  new OpCode("*SRE", 3, 6, AddressingMode.Absolute)},
+            {0x5f,  new OpCode("*SRE", 3, 7, AddressingMode.Absolute_X)},
+            {0x5b,  new OpCode("*SRE", 3, 7, AddressingMode.Absolute_Y)},
+            {0x43,  new OpCode("*SRE", 2, 8, AddressingMode.Indirect_X)},
+            {0x53,  new OpCode("*SRE", 2, 8, AddressingMode.Indirect_Y)},
+
+
+            {0x80,  new OpCode("*NOP", 2,2, AddressingMode.Immediate)},
+            {0x82,  new OpCode("*NOP", 2,2, AddressingMode.Immediate)},
+            {0x89,  new OpCode("*NOP", 2,2, AddressingMode.Immediate)},
+            {0xc2,  new OpCode("*NOP", 2,2, AddressingMode.Immediate)},
+            {0xe2,  new OpCode("*NOP", 2,2, AddressingMode.Immediate)},
+
+
+            {0xCB,  new OpCode("*AXS", 2,2, AddressingMode.Immediate)},
+
+            {0x6B,  new OpCode("*ARR", 2,2, AddressingMode.Immediate)},
+
+            {0xeb,  new OpCode("*SBC", 2,2, AddressingMode.Immediate)},
+
+            {0x0b,  new OpCode("*ANC", 2,2, AddressingMode.Immediate)},
+            {0x2b,  new OpCode("*ANC", 2,2, AddressingMode.Immediate)},
+
+            {0x4b,  new OpCode("*ALR", 2,2, AddressingMode.Immediate)},
+            // new OpCode(0xCB, "IGN", 3,4 /* or 5*/, AddressingMode.Absolute_X)},
+
+            {0x04,  new OpCode("*NOP", 2,3, AddressingMode.ZeroPage)},
+            {0x44,  new OpCode("*NOP", 2,3, AddressingMode.ZeroPage)},
+            {0x64,  new OpCode("*NOP", 2,3, AddressingMode.ZeroPage)},
+            {0x14,  new OpCode("*NOP", 2, 4, AddressingMode.ZeroPage_X)},
+            {0x34,  new OpCode("*NOP", 2, 4, AddressingMode.ZeroPage_X)},
+            {0x54,  new OpCode("*NOP", 2, 4, AddressingMode.ZeroPage_X)},
+            {0x74,  new OpCode("*NOP", 2, 4, AddressingMode.ZeroPage_X)},
+            {0xd4,  new OpCode("*NOP", 2, 4, AddressingMode.ZeroPage_X)},
+            {0xf4,  new OpCode("*NOP", 2, 4, AddressingMode.ZeroPage_X)},
+            {0x0c,  new OpCode("*NOP", 3, 4, AddressingMode.Absolute)},
+            {0x1c,  new OpCode("*NOP", 3, 4 /*or 5*/, AddressingMode.Absolute_X)},
+            {0x3c,  new OpCode("*NOP", 3, 4 /*or 5*/, AddressingMode.Absolute_X)},
+            {0x5c,  new OpCode("*NOP", 3, 4 /*or 5*/, AddressingMode.Absolute_X)},
+            {0x7c,  new OpCode("*NOP", 3, 4 /*or 5*/, AddressingMode.Absolute_X)},
+            {0xdc,  new OpCode("*NOP", 3, 4 /* or 5*/, AddressingMode.Absolute_X)},
+            {0xfc,  new OpCode("*NOP", 3, 4 /* or 5*/, AddressingMode.Absolute_X)},
+
+            {0x67,  new OpCode("*RRA", 2, 5, AddressingMode.ZeroPage)},
+            {0x77,  new OpCode("*RRA", 2, 6, AddressingMode.ZeroPage_X)},
+            {0x6f,  new OpCode("*RRA", 3, 6, AddressingMode.Absolute)},
+            {0x7f,  new OpCode("*RRA", 3, 7, AddressingMode.Absolute_X)},
+            {0x7b,  new OpCode("*RRA", 3, 7, AddressingMode.Absolute_Y)},
+            {0x63,  new OpCode("*RRA", 2, 8, AddressingMode.Indirect_X)},
+            {0x73,  new OpCode("*RRA", 2, 8, AddressingMode.Indirect_Y)},
+
+
+            {0xe7,  new OpCode("*ISB", 2,5, AddressingMode.ZeroPage)},
+            {0xf7,  new OpCode("*ISB", 2,6, AddressingMode.ZeroPage_X)},
+            {0xef,  new OpCode("*ISB", 3,6, AddressingMode.Absolute)},
+            {0xff,  new OpCode("*ISB", 3,7, AddressingMode.Absolute_X)},
+            {0xfb,  new OpCode("*ISB", 3,7, AddressingMode.Absolute_Y)},
+            {0xe3,  new OpCode("*ISB", 2,8, AddressingMode.Indirect_X)},
+            {0xf3,  new OpCode("*ISB", 2,8, AddressingMode.Indirect_Y)},
+
+            {0x02,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0x12,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0x22,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0x32,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0x42,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0x52,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0x62,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0x72,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0x92,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0xb2,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0xd2,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0xf2,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+
+            {0x1a,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0x3a,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0x5a,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0x7a,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0xda,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+            //{0xea,  new OpCode("NOP", 1,2, AddressingMode.NoneAddressing)},
+            {0xfa,  new OpCode("*NOP", 1,2, AddressingMode.NoneAddressing)},
+
+            {0xab,  new OpCode("*LXA", 2, 3, AddressingMode.Immediate)}, //todo: highly unstable and not used
+            //http://visual6502.org/wiki/index.php?title=6502_Opcode_8B_%28XAA,_ANE%29
+            {0x8b,  new OpCode("*XAA", 2, 3, AddressingMode.Immediate)}, //todo: highly unstable and not used
+            {0xbb,  new OpCode("*LAS", 3, 2, AddressingMode.Absolute_Y)}, //todo: highly unstable and not used
+            {0x9b,  new OpCode("*TAS", 3, 2, AddressingMode.Absolute_Y)}, //todo: highly unstable and not used
+            {0x93,  new OpCode("*AHX", 2, /* guess */ 8, AddressingMode.Indirect_Y)}, //todo: highly unstable and not used
+            {0x9f,  new OpCode("*AHX", 3, /* guess */ 4/* or 5*/, AddressingMode.Absolute_Y)}, //todo: highly unstable and not used
+            {0x9e,  new OpCode("*SHX", 3, /* guess */ 4/* or 5*/, AddressingMode.Absolute_Y)}, //todo: highly unstable and not used
+            {0x9c,  new OpCode("*SHY", 3, /* guess */ 4/* or 5*/, AddressingMode.Absolute_X)}, //todo: highly unstable and not used
+
+            {0xa7,  new OpCode("*LAX", 2, 3, AddressingMode.ZeroPage)},
+            {0xb7,  new OpCode("*LAX", 2, 4, AddressingMode.ZeroPage_Y)},
+            {0xaf,  new OpCode("*LAX", 3, 4, AddressingMode.Absolute)},
+            {0xbf,  new OpCode("*LAX", 3, 4, AddressingMode.Absolute_Y)},
+            {0xa3,  new OpCode("*LAX", 2, 6, AddressingMode.Indirect_X)},
+            {0xb3,  new OpCode("*LAX", 2, 5, AddressingMode.Indirect_Y)},
+
+            {0x87,  new OpCode("*SAX", 2, 3, AddressingMode.ZeroPage)},
+            {0x97,  new OpCode("*SAX", 2, 4, AddressingMode.ZeroPage_Y)},
+            {0x8f,  new OpCode("*SAX", 3, 4, AddressingMode.Absolute)},
+            {0x83,  new OpCode("*SAX", 2, 6, AddressingMode.Indirect_X)},
         };
     }
 }
