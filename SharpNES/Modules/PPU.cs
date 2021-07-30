@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SharpNES.Modules
 {
@@ -18,7 +14,7 @@ namespace SharpNES.Modules
         public uint cycles = 0;
         public byte? nmi_interrupt = null;
         public Mirroring mirroring;
-        public AddrRegister addr = new AddrRegister() { hi_ptr = true, value = new Tuple<byte, byte>(0, 0) };
+        public AddrRegister addr = new AddrRegister() { hi_ptr = true, value = (0, 0) };
         public ControlRegister ctrl = ControlRegister.NONE;
         public MaskRegister mask = MaskRegister.NONE;
         public StatusRegister status = StatusRegister.NONE;
@@ -35,7 +31,9 @@ namespace SharpNES.Modules
         }
         public byte? PollNMI_Interrupt()
         {
-            return nmi_interrupt;
+            byte? inter = nmi_interrupt;
+            nmi_interrupt = null;
+            return inter;
         }
         public bool Tick(byte cycles)
         {
@@ -47,16 +45,19 @@ namespace SharpNES.Modules
 
                 if (scanline == 241)
                 {
+                    status.SetVBlankStatus(true);
+                    status.SetSpriteZeroHit(false);
                     if (ctrl.GenerateVBlankNMI())
                     {
-                        status.SetVBlankStatus(true);
-                        Console.WriteLine("TODO: Trigger NMI Interrupt");
+                        nmi_interrupt = 1;
                     }
                 }
 
                 if (scanline >= 262)
                 {
                     scanline = 0;
+                    nmi_interrupt = null;
+                    status.SetSpriteZeroHit(false);
                     status.ResetVBlankStatus();
                     return true;
                 }
@@ -65,7 +66,12 @@ namespace SharpNES.Modules
         }
         public void WriteToCtrl(byte data)
         {
+            bool before_nmi_status = ctrl.GenerateVBlankNMI();
             ctrl.Update(data);
+            if (!before_nmi_status && ctrl.GenerateVBlankNMI() && status.IsInVBlank())
+            {
+                nmi_interrupt = 1;
+            }
         }
         public void WriteToMask(byte value)
         {
@@ -113,6 +119,7 @@ namespace SharpNES.Modules
             }
             else if (_addr.InRange(0x3f00, 0x3fff)) palette_table[(ushort)(_addr - 0x3f00)] = value;
             else throw new Exception(string.Format("Unexpected access to mirrored space {0:X4}", _addr));
+            IncrementVRAMAddr();
         }
         public void IncrementVRAMAddr()
         {
@@ -168,7 +175,7 @@ namespace SharpNES.Modules
             foreach (byte x in data)
             {
                 oam_data[oam_addr] = x;
-                oam_addr++;
+                oam_addr += 1;
             }
         }
     }

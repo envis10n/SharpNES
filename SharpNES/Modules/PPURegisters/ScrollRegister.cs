@@ -1,10 +1,10 @@
 ﻿namespace SharpNES.Modules.PPURegisters
 {
-    public struct ScrollRegister
+    public class ScrollRegister
     {
-        public byte scroll_x { get; set; }
-        public byte scroll_y { get; set; }
-        public bool latch { get; set; }
+        public byte scroll_x = 0;
+        public byte scroll_y = 0;
+        public bool latch = false;
         public void Write(byte data)
         {
             if (!latch) scroll_x = data;

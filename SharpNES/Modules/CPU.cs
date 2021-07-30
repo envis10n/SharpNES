@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading;
 
 namespace SharpNES.Modules
 {
@@ -52,35 +51,39 @@ namespace SharpNES.Modules
         {
             bus = _bus;
         }
-        public ushort GetAbsoluteAddress(AddressingMode mode, ushort addr)
+        public static bool PageCross(ushort addr1, ushort addr2)
+        {
+            return (ushort)(addr1 & 0xFF00) != (ushort)(addr2 & 0xFF00);
+        }
+        public (ushort, bool) GetAbsoluteAddress(AddressingMode mode, ushort addr)
         {
             switch (mode)
             {
                 case AddressingMode.ZeroPage:
-                    return MemRead(addr);
+                    return (MemRead(addr), false);
                 case AddressingMode.Absolute:
-                    return MemReadShort(addr);
+                    return (MemReadShort(addr), false);
                 case AddressingMode.ZeroPage_X:
                     {
                         byte pos = MemRead(addr);
-                        return (ushort)(pos + register_x);
+                        return ((ushort)(pos + register_x), false);
                     }
                 case AddressingMode.ZeroPage_Y:
                     {
                         byte pos = MemRead(addr);
-                        return (ushort)(pos + register_y);
+                        return ((ushort)(pos + register_y), false);
                     }
                 case AddressingMode.Absolute_X:
                     {
                         ushort ba = MemReadShort(addr);
                         ushort x = register_x;
-                        return (ushort)(ba + x);
+                        return ((ushort)(ba + x), PageCross(ba, addr));
                     }
                 case AddressingMode.Absolute_Y:
                     {
                         ushort ba = MemReadShort(addr);
                         ushort y = register_y;
-                        return (ushort)(ba + y);
+                        return ((ushort)(ba + y), PageCross(ba, addr));
                     }
                 case AddressingMode.Indirect_X:
                     {
@@ -88,7 +91,7 @@ namespace SharpNES.Modules
                         byte ptr = (byte)(ba + register_x);
                         ushort lo = MemRead(ptr);
                         ushort hi = MemRead((byte)(ptr + 1));
-                        return (ushort)((ushort)(hi << 8) | lo);
+                        return ((ushort)((ushort)(hi << 8) | lo), false);
                     }
                 case AddressingMode.Indirect_Y:
                     {
@@ -97,19 +100,20 @@ namespace SharpNES.Modules
                         ushort lo = MemRead(ba);
                         ushort hi = MemRead((byte)(ba + 1));
                         ushort deref_base = (ushort)((ushort)(hi << 8) | lo);
-                        return (ushort)(deref_base + register_y);
+                        ushort deref = (ushort)(deref_base + register_y);
+                        return (deref, PageCross(deref, deref_base));
                     }
                 case AddressingMode.NoneAddressing:
                 default:
                     throw new Exception("Unused Addressing Mode!");
             }
         }
-        public ushort GetOperandAddress(AddressingMode mode)
+        public (ushort, bool) GetOperandAddress(AddressingMode mode)
         {
             switch (mode)
             {
                 case AddressingMode.Immediate:
-                    return program_counter;
+                    return (program_counter, false);
                 default:
                     return GetAbsoluteAddress(mode, program_counter);
             }
@@ -199,13 +203,13 @@ namespace SharpNES.Modules
         }
         private void SBC(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, page_cross) = GetOperandAddress(mode);
             byte data = MemRead(addr);
             AddToRegisterA((byte)(-data - 1));
         }
         private void ADC(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, page_cross) = GetOperandAddress(mode);
             AddToRegisterA(MemRead(addr));
         }
         private byte StackPop()
@@ -247,7 +251,7 @@ namespace SharpNES.Modules
         }
         private byte ASL(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, _) = GetOperandAddress(mode);
             byte data = MemRead(addr);
             if ((byte)(data >> 7) == 1)
             {
@@ -265,7 +269,7 @@ namespace SharpNES.Modules
         {
             byte data = register_a;
 
-            if ((data & 1) == 1)
+            if ((byte)(data & 1) == 1)
             {
                 SetCarryFlag();
             } else
@@ -277,9 +281,9 @@ namespace SharpNES.Modules
         }
         private byte LSR(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, _) = GetOperandAddress(mode);
             byte data = MemRead(addr);
-            if ((data & 1) == 1)
+            if ((byte)(data & 1) == 1)
             {
                 SetCarryFlag();
             } else
@@ -293,7 +297,7 @@ namespace SharpNES.Modules
         }
         private byte ROL(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, _) = GetOperandAddress(mode);
             byte data = MemRead(addr);
 
             bool old_carry = (status & CpuFlags.CARRY) != 0;
@@ -335,11 +339,11 @@ namespace SharpNES.Modules
         }
         private byte ROR(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, _) = GetOperandAddress(mode);
             byte data = MemRead(addr);
             bool old_carry = (status & CpuFlags.CARRY) != 0;
 
-            if ((data & 1) == 1)
+            if ((byte)(data & 1) == 1)
             {
                 SetCarryFlag();
             } else
@@ -360,7 +364,7 @@ namespace SharpNES.Modules
             byte data = register_a;
             bool old_carry = (status & CpuFlags.CARRY) != 0;
 
-            if ((data & 1) == 1)
+            if ((byte)(data & 1) == 1)
             {
                 SetCarryFlag();
             } else
@@ -376,28 +380,28 @@ namespace SharpNES.Modules
         }
         private byte INC(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, _) = GetOperandAddress(mode);
             byte data = MemRead(addr);
-            data++;
+            data += 1;
             MemWrite(addr, data);
             UpdateZeroAndNegativeFlags(data);
             return data;
         }
         private void DEY()
         {
-            register_y--;
+            register_y -= 1;
             UpdateZeroAndNegativeFlags(register_y);
         }
         private void DEX()
         {
-            register_x--;
+            register_x -= 1;
             UpdateZeroAndNegativeFlags(register_x);
         }
         private byte DEC(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, _) = GetOperandAddress(mode);
             byte data = MemRead(addr);
-            data--;
+            data -= 1;
             MemWrite(addr, data);
             UpdateZeroAndNegativeFlags(data);
             return data;
@@ -422,7 +426,7 @@ namespace SharpNES.Modules
         }
         private void BIT(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, _) = GetOperandAddress(mode);
             byte data = MemRead(addr);
             byte and = (byte)(register_a & data);
             if (and == 0)
@@ -432,12 +436,12 @@ namespace SharpNES.Modules
             {
                 status &= ~CpuFlags.ZERO;
             }
-            if ((data & 0b10000000) > 0) status |= CpuFlags.NEGATIVE;
-            if ((data & 0b01000000) > 0) status |= CpuFlags.OVERFLOW;
+            if ((byte)(data & 0b10000000) > 0) status |= CpuFlags.NEGATIVE;
+            if ((byte)(data & 0b01000000) > 0) status |= CpuFlags.OVERFLOW;
         }
         private void COMPARE(AddressingMode mode, byte compare_with)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, page_cross) = GetOperandAddress(mode);
             byte data = MemRead(addr);
             if (data <= compare_with)
             {
@@ -447,6 +451,7 @@ namespace SharpNES.Modules
                 status &= ~CpuFlags.CARRY;
             }
             UpdateZeroAndNegativeFlags((byte)(compare_with - data));
+            if (page_cross) bus.Tick(1);
         }
         private void BRANCH(bool condition)
         {
@@ -468,25 +473,28 @@ namespace SharpNES.Modules
         }
         private void LDY(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, page_cross) = GetOperandAddress(mode);
             register_y = MemRead(addr);
             UpdateZeroAndNegativeFlags(register_y);
+            if (page_cross) bus.Tick(1);
         }
         private void LDX(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, page_cross) = GetOperandAddress(mode);
             register_x = MemRead(addr);
             UpdateZeroAndNegativeFlags(register_x);
+            if (page_cross) bus.Tick(1);
         }
         private void LDA(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, page_cross) = GetOperandAddress(mode);
             register_a = MemRead(addr);
             UpdateZeroAndNegativeFlags(register_a);
+            if (page_cross) bus.Tick(1);
         }
         private void STA(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, _) = GetOperandAddress(mode);
             MemWrite(addr, register_a);
         }
         private void SetRegisterA(byte value)
@@ -496,21 +504,24 @@ namespace SharpNES.Modules
         }
         private void AND(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, page_cross) = GetOperandAddress(mode);
             byte data = MemRead(addr);
             SetRegisterA((byte)(data & register_a));
+            if (page_cross) bus.Tick(1);
         }
         private void EOR(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, page_cross) = GetOperandAddress(mode);
             byte data = MemRead(addr);
             SetRegisterA((byte)(data ^ register_a));
+            if (page_cross) bus.Tick(1);
         }
         private void ORA(AddressingMode mode)
         {
-            ushort addr = GetOperandAddress(mode);
+            var (addr, page_cross) = GetOperandAddress(mode);
             byte data = MemRead(addr);
             SetRegisterA((byte)(data | register_a));
+            if (page_cross) bus.Tick(1);
         }
         private void TAX()
         {
@@ -538,7 +549,7 @@ namespace SharpNES.Modules
                 status &= ~CpuFlags.ZERO;
             }
 
-            if (((CpuFlags)result & CpuFlags.NEGATIVE) != 0)
+            if ((byte)(result >> 7) == 1)
             {
                 status |= CpuFlags.NEGATIVE;
             }
@@ -576,7 +587,6 @@ namespace SharpNES.Modules
             {
                 if (bus.PollNMIStatus() != null)
                 {
-                    Console.WriteLine("INTERRUPT NMI");
                     Interrupt(Interrupts.NMI);
                 }
                 callback(this);
@@ -585,6 +595,7 @@ namespace SharpNES.Modules
                 ushort program_counter_state = program_counter;
                 if (OpCodes.OPCODES_MAP.TryGetValue(code, out OpCode opcode))
                 {
+                    //Console.WriteLine(string.Format("{0:X4}\t{1:X2} {2}", program_counter_state, code, opcode.mnemonic));
                     switch (code)
                     {
                         /* LDA */
@@ -881,7 +892,7 @@ namespace SharpNES.Modules
                         case 0x96:
                         case 0x8e:
                             {
-                                ushort addr = GetOperandAddress(opcode.mode);
+                                var (addr, _) = GetOperandAddress(opcode.mode);
                                 MemWrite(addr, register_x);
                                 break;
                             }
@@ -890,7 +901,7 @@ namespace SharpNES.Modules
                         case 0x94:
                         case 0x8c:
                             {
-                                ushort addr = GetOperandAddress(opcode.mode);
+                                var (addr, _) = GetOperandAddress(opcode.mode);
                                 MemWrite(addr, register_y);
                                 break;
                             }
@@ -956,7 +967,7 @@ namespace SharpNES.Modules
                         case 0xd3:
                         case 0xc3:
                             {
-                                ushort addr = GetOperandAddress(opcode.mode);
+                                var (addr, _) = GetOperandAddress(opcode.mode);
                                 byte data = MemRead(addr);
                                 data--;
                                 MemWrite(addr, data);
@@ -1019,7 +1030,7 @@ namespace SharpNES.Modules
                         /* AXS */
                         case 0xCB:
                             {
-                                ushort addr = GetOperandAddress(opcode.mode);
+                                var (addr, _) = GetOperandAddress(opcode.mode);
                                 byte data = MemRead(addr);
                                 byte x_and_a = (byte)(register_x & register_a);
                                 byte result = (byte)(x_and_a - 1);
@@ -1035,7 +1046,7 @@ namespace SharpNES.Modules
                         /* ARR */
                         case 0x6B:
                             {
-                                ushort addr = GetOperandAddress(opcode.mode);
+                                var (addr, _) = GetOperandAddress(opcode.mode);
                                 byte data = MemRead(addr);
                                 ANDWithRegisterA(data);
                                 RORAccumulator();
@@ -1062,7 +1073,7 @@ namespace SharpNES.Modules
                         /* Unofficial SBC */
                         case 0xeb:
                             {
-                                ushort addr = GetOperandAddress(opcode.mode);
+                                var (addr, _) = GetOperandAddress(opcode.mode);
                                 byte data = MemRead(addr);
                                 SubFromRegisterA(data);
                                 break;
@@ -1071,7 +1082,7 @@ namespace SharpNES.Modules
                         case 0x0b:
                         case 0x2b:
                             {
-                                ushort addr = GetOperandAddress(opcode.mode);
+                                var (addr, _) = GetOperandAddress(opcode.mode);
                                 byte data = MemRead(addr);
                                 ANDWithRegisterA(data);
                                 if ((byte)(status & CpuFlags.NEGATIVE) != 0)
@@ -1086,7 +1097,7 @@ namespace SharpNES.Modules
                         /* ALR */
                         case 0x4b:
                             {
-                                ushort addr = GetOperandAddress(opcode.mode);
+                                var (addr, _) = GetOperandAddress(opcode.mode);
                                 byte data = MemRead(addr);
                                 ANDWithRegisterA(data);
                                 LSRAccumulator();
@@ -1110,8 +1121,9 @@ namespace SharpNES.Modules
                         case 0xdc:
                         case 0xfc:
                             {
-                                ushort addr = GetOperandAddress(opcode.mode);
+                                var (addr, page_cross) = GetOperandAddress(opcode.mode);
                                 byte data = MemRead(addr);
+                                if (page_cross) bus.Tick(1);
                                 // DO NOTHING
                                 break;
                             }
@@ -1169,7 +1181,7 @@ namespace SharpNES.Modules
                         case 0xa3:
                         case 0xb3:
                             {
-                                ushort addr = GetOperandAddress(opcode.mode);
+                                var (addr, _) = GetOperandAddress(opcode.mode);
                                 byte data = MemRead(addr);
                                 SetRegisterA(data);
                                 register_x = register_a;
@@ -1182,7 +1194,7 @@ namespace SharpNES.Modules
                         case 0x83:
                             {
                                 byte data = (byte)(register_a & register_x);
-                                ushort addr = GetOperandAddress(opcode.mode);
+                                var (addr, _) = GetOperandAddress(opcode.mode);
                                 MemWrite(addr, data);
                                 break;
                             }
@@ -1198,7 +1210,7 @@ namespace SharpNES.Modules
                             {
                                 register_a = register_x;
                                 UpdateZeroAndNegativeFlags(register_a);
-                                ushort addr = GetOperandAddress(opcode.mode);
+                                var (addr, _) = GetOperandAddress(opcode.mode);
                                 byte data = MemRead(addr);
                                 ANDWithRegisterA(data);
                                 break;
@@ -1206,7 +1218,7 @@ namespace SharpNES.Modules
                         /* LAS */
                         case 0xbb:
                             {
-                                ushort addr = GetOperandAddress(opcode.mode);
+                                var (addr, _) = GetOperandAddress(opcode.mode);
                                 byte data = MemRead(addr);
                                 data = (byte)(data & stack_pointer);
                                 register_a = data;

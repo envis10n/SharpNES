@@ -8,137 +8,105 @@ namespace SharpNES.Modules
         RAM,
         PPU,
         ROM,
+        APU,
+        JOYPAD1,
+        JOYPAD2,
     }
     public class Bus : IMemory
     {
         byte[] cpu_vram = new byte[2048];
         byte[] prg_rom;
         PPU ppu;
+        Joypad joypad1;
         uint cycles = 0;
         static ushort RAM = 0x0000;
         static ushort RAM_MIRRORS_END = 0x1FFF;
-        static ushort PPU_REGISTERS = 0x2000;
         static ushort PPU_REGISTERS_MIRRORS_END = 0x3FFF;
-        public Bus(Rom rom)
+
+        Action<PPU, Joypad> gameloop_callback;
+        public Bus(Rom rom, Action<PPU, Joypad> gameloop)
         {
+            joypad1 = new Joypad() { strobe = false, button_index = 0, button_status = JoypadButton.NONE };
             ppu = new PPU(rom.chr_rom, rom.screen_mirroring);
             prg_rom = rom.prg_rom;
-        }
-        public static BusAccessType GetAccessType(ushort addr)
-        {
-            if (addr >= RAM && addr <= RAM_MIRRORS_END) return BusAccessType.RAM;
-            else if (addr >= PPU_REGISTERS && addr <= PPU_REGISTERS_MIRRORS_END) return BusAccessType.PPU;
-            else if (addr >= 0x8000 && addr <= 0xFFFF) return BusAccessType.ROM;
-            else return BusAccessType.NONE;
+            gameloop_callback = gameloop;
         }
         public void Tick(byte cycles)
         {
             this.cycles += cycles;
+            bool nmi_before = ppu.nmi_interrupt.HasValue;
             ppu.Tick((byte)(cycles * 3));
+            bool nmi_after = ppu.nmi_interrupt.HasValue;
+            if (!nmi_before && nmi_after)
+            {
+                gameloop_callback(ppu, joypad1);
+            }
         }
         public byte? PollNMIStatus()
         {
-            return ppu.nmi_interrupt;
+            return ppu.PollNMI_Interrupt();
         }
         public void MemWrite(ushort addr, byte data)
         {
-            BusAccessType accessType = GetAccessType(addr);
-            switch (accessType)
+            if (addr.InRange(RAM, RAM_MIRRORS_END))
             {
-                case BusAccessType.NONE:
-                    Console.WriteLine($"Ignoring memory access at 0x{addr.ToString("X4")}");
-                    break;
-                case BusAccessType.RAM:
-                    {
-                        ushort mirror_down_addr = (ushort)(addr & 0b00000111_11111111);
-                        cpu_vram[mirror_down_addr] = data;
-                        break;
-                    }
-                case BusAccessType.PPU:
-                    {
-                        switch (addr)
-                        {
-                            case 0x2000:
-                                ppu.WriteToCtrl(data);
-                                break;
-                            case 0x2001:
-                                ppu.WriteToMask(data);
-                                break;
-                            case 0x2002:
-                                throw new Exception("Attempt to write to PPU status register.");
-                            case 0x2003:
-                                ppu.WriteToOAMAddr(data);
-                                break;
-                            case 0x2004:
-                                ppu.WriteToOAMData(data);
-                                break;
-                            case 0x2005:
-                                ppu.WriteToScroll(data);
-                                break;
-                            case 0x2006:
-                                ppu.WriteToPPUAddr(data);
-                                break;
-                            case 0x2007:
-                                ppu.WriteToData(data);
-                                break;
-                            default:
-                                ushort mirror_down_addr = (ushort)(addr & 0b00100000_00000111);
-                                MemWrite(mirror_down_addr, data);
-                                break;
-                        }
-                        break;
-                    }
-                case BusAccessType.ROM:
-                    Console.WriteLine($"Ignoring memory access at 0x{addr.ToString("X4")}");
-                    break;
-                    //throw new Exception("Attempt to access cartridge ROM space.");
-                default:
-                    throw new Exception("Invalid bus access type.");
+                ushort mirror_down_addr = (ushort)(addr & 0b11111111111);
+                cpu_vram[mirror_down_addr] = data;
             }
+            else if (addr == 0x2000) ppu.WriteToCtrl(data);
+            else if (addr == 0x2001) ppu.WriteToMask(data);
+            else if (addr == 0x2002) throw new Exception("Attempt to write to PPU status register!");
+            else if (addr == 0x2003) ppu.WriteToOAMAddr(data);
+            else if (addr == 0x2004) ppu.WriteToOAMData(data);
+            else if (addr == 0x2005) ppu.WriteToScroll(data);
+            else if (addr == 0x2006) ppu.WriteToPPUAddr(data);
+            else if (addr == 0x2007) ppu.WriteToData(data);
+            else if (addr.InRange(0x4000, 0x4013) || addr == 0x4015) { } // Ignore APU
+            else if (addr == 0x4016) joypad1.Write(data);
+            else if (addr == 0x4017) { } // Ignore Joypad 2
+            else if (addr == 0x4014)
+            {
+                byte[] buffer = new byte[256];
+                ushort _data = data;
+                ushort hi = (ushort)(_data << 8);
+                for (ushort i = 0; i < 256; i++)
+                {
+                    buffer[i] = MemRead((ushort)(hi + i));
+                }
+                ppu.WriteOamDMA(buffer);
+            }
+            else if (addr.InRange(0x2008, PPU_REGISTERS_MIRRORS_END))
+            {
+                ushort mirror_down_addr = (ushort)(addr & 0b00100000_00000111);
+                MemWrite(mirror_down_addr, data);
+            }
+            else if (addr.InRange(0x8000, 0xFFFF)) throw new Exception("Attempt to write to Cartridge ROM space");
+            else Console.WriteLine(string.Format("Ignoring memory write-access at {0:X4}", addr));
         }
         public byte MemRead(ushort addr)
         {
-            BusAccessType accessType = GetAccessType(addr);
-            switch (accessType)
+            if (addr.InRange(RAM, RAM_MIRRORS_END))
             {
-                case BusAccessType.NONE:
-                    Console.WriteLine($"Ignoring memory access at 0x{addr.ToString("X4")}");
-                    return 0;
-                case BusAccessType.RAM:
-                    {
-                        ushort mirror_down_addr = (ushort)(addr & 0b00000111_11111111);
-                        return cpu_vram[mirror_down_addr];
-                    }
-                case BusAccessType.PPU:
-                    {
-                        switch (addr)
-                        {
-                            case 0x2000:
-                            case 0x2001:
-                            case 0x2003:
-                            case 0x2005:
-                            case 0x2006:
-                            case 0x4014:
-                                throw new Exception($"Attempt to read from write-only PPU address {addr.ToString("X4")}");
-                            case 0x2002:
-                                return ppu.ReadStatus();
-                            case 0x2004:
-                                return ppu.ReadOAMData();
-                            case 0x2007:
-                                return ppu.ReadData();
-                            case 0x2008:
-                                {
-                                    ushort mirror_down_addr = (ushort)(addr & 0b00100000_00000111);
-                                    return MemRead(mirror_down_addr);
-                                }
-                        }
-                        Console.WriteLine(string.Format("Ignoring mem access at {0:X4}", addr));
-                        return 0;
-                    }
-                case BusAccessType.ROM:
-                    return ReadPrgRom(addr);
-                default:
-                    throw new Exception("Invalid bus access type.");
+                ushort mirror_down_addr = (ushort)(addr & 0b00000111_11111111);
+                return cpu_vram[mirror_down_addr];
+            }
+            else if (addr.Matches(0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014)) return 0; // ignore PPU write-only
+            else if (addr == 0x2002) return ppu.ReadStatus();
+            else if (addr == 0x2004) return ppu.ReadOAMData();
+            else if (addr == 0x2007) return ppu.ReadData();
+            else if (addr.InRange(0x4000, 0x4015)) return 0; // Ignore APU
+            else if (addr == 0x4016) return joypad1.Read();
+            else if (addr == 0x4017) return 0; // Ignore Joypad2
+            else if (addr.InRange(0x2008, PPU_REGISTERS_MIRRORS_END))
+            {
+                ushort mirror_down_addr = (ushort)(addr & 0b00100000_00000111);
+                return MemRead(mirror_down_addr);
+            }
+            else if (addr.InRange(0x8000, 0xFFFF)) return ReadPrgRom(addr);
+            else
+            {
+                Console.WriteLine(string.Format("Ignoring memory access at {0:X4}", addr));
+                return 0;
             }
         }
         byte ReadPrgRom(ushort addr)

@@ -43,7 +43,7 @@ namespace SharpNES.Modules
                 }
                 else
                 {
-                    ushort addr = cpu.GetAbsoluteAddress(ops.mode, (ushort)(begin + 1));
+                    var (addr, _) = cpu.GetAbsoluteAddress(ops.mode, (ushort)(begin + 1));
                     mem_addr = addr;
                     stored_value = cpu.MemRead(addr);
                 }

@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "SharpNES": {
+      "commandName": "Project",
+      "commandLineArgs": "pacman.nes"
+    }
+  }
+}
