@@ -214,6 +214,9 @@ namespace SharpNES
                 QueueLock.ReleaseMutex();
             });
 
+            if (Joystick.IsConnected(0)) bus.SetJoypadConnected(0, true);
+            if (Joystick.IsConnected(1)) bus.SetJoypadConnected(1, true);
+
             window.JoystickButtonPressed += (sender, args) =>
             {
                 GamepadButton button = (GamepadButton)args.Button;
@@ -267,7 +270,7 @@ namespace SharpNES
                     {
                         case Joystick.Axis.PovX:
                         case Joystick.Axis.PovY:
-                            float pos = args.Position <= AXIS_DEADZONE || args.Position >= -AXIS_DEADZONE ? 0 : args.Position > AXIS_DEADZONE ? 100 : -100;
+                            float pos = Math.Abs(args.Position) <= AXIS_DEADZONE ? 0 : args.Position > AXIS_DEADZONE ? 100 : -100;
                             JoypadButton old_button = gamepad_dpad_map[(args.Axis, old_position)];
                             JoypadButton new_button = gamepad_dpad_map[(args.Axis, pos)];
                             if (old_button == JoypadButton.NONE && new_button != JoypadButton.NONE)
@@ -294,6 +297,24 @@ namespace SharpNES
                     QueueLock.WaitOne();
                     keyboard_events.Enqueue(ev.Value);
                     QueueLock.ReleaseMutex();
+                }
+            };
+
+            window.JoystickConnected += (sender, args) =>
+            {
+                if (args.JoystickId <= 1)
+                {
+                    Console.WriteLine($"Joypad {args.JoystickId} connected.");
+                    bus.SetJoypadConnected(args.JoystickId, true);
+                }
+            };
+
+            window.JoystickDisconnected += (sender, args) =>
+            {
+                if (args.JoystickId <= 1)
+                {
+                    Console.WriteLine($"Joypad {args.JoystickId} disconnected.");
+                    bus.SetJoypadConnected(args.JoystickId, false);
                 }
             };
 

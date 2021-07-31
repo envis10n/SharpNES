@@ -30,6 +30,10 @@ namespace SharpNES.Modules
             prg_rom = rom.prg_rom;
             gameloop_callback = gameloop;
         }
+        public void SetJoypadConnected(uint port, bool state)
+        {
+            joypads[port].connected = state;
+        }
         public void Tick(byte cycles)
         {
             this.cycles += cycles;

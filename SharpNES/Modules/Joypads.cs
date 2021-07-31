@@ -35,6 +35,7 @@ namespace SharpNES.Modules
     {
         public bool strobe = false;
         public byte button_index = 0;
+        public bool connected = false;
         public JoypadButton button_status = JoypadButton.NONE;
         public void Write(byte data)
         {
@@ -43,6 +44,7 @@ namespace SharpNES.Modules
         }
         public byte Read()
         {
+            if (!connected) return 0;
             if (button_index > 7) return 1;
             byte response = (byte)(((byte)button_status & (byte)(1 << button_index)) >> button_index);
             if (!strobe && button_index <= 7) button_index++;
@@ -63,6 +65,14 @@ namespace SharpNES.Modules
                 else if (index == 3) index = 1;
                 return ports[index];
             }
+        }
+        public void Connect(uint port)
+        {
+            this[port].connected = true;
+        }
+        public void Disconnect(uint port)
+        {
+            this[port].connected = false;
         }
         public byte Read(uint port)
         {
