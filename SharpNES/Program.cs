@@ -214,9 +214,6 @@ namespace SharpNES
                 QueueLock.ReleaseMutex();
             });
 
-            if (Joystick.IsConnected(0)) bus.SetJoypadConnected(0, true);
-            if (Joystick.IsConnected(1)) bus.SetJoypadConnected(1, true);
-
             window.JoystickButtonPressed += (sender, args) =>
             {
                 GamepadButton button = (GamepadButton)args.Button;
@@ -305,7 +302,7 @@ namespace SharpNES
                 if (args.JoystickId <= 1)
                 {
                     Console.WriteLine($"Joypad {args.JoystickId} connected.");
-                    bus.SetJoypadConnected(args.JoystickId, true);
+                    //bus.SetJoypadConnected(args.JoystickId, true);
                 }
             };
 
@@ -314,7 +311,7 @@ namespace SharpNES
                 if (args.JoystickId <= 1)
                 {
                     Console.WriteLine($"Joypad {args.JoystickId} disconnected.");
-                    bus.SetJoypadConnected(args.JoystickId, false);
+                    //bus.SetJoypadConnected(args.JoystickId, false);
                 }
             };
 
@@ -326,13 +323,13 @@ namespace SharpNES
                     window.Close();
                     Environment.Exit(0);
                 }
-                else if (key_map_plr1.TryGetValue(args.Code, out btn))
+                else if (!Joystick.IsConnected(0) && key_map_plr1.TryGetValue(args.Code, out btn))
                 {
                     QueueLock.WaitOne();
                     keyboard_events.Enqueue(new KeyEvent(0, btn, true));
                     QueueLock.ReleaseMutex();
                 }
-                else if (key_map_plr2.TryGetValue(args.Code, out btn))
+                else if (!Joystick.IsConnected(1) && key_map_plr2.TryGetValue(args.Code, out btn))
                 {
                     QueueLock.WaitOne();
                     keyboard_events.Enqueue(new KeyEvent(1, btn, true));
@@ -343,12 +340,12 @@ namespace SharpNES
             window.KeyReleased += (sender, args) =>
             {
                 JoypadButton btn;
-                if (key_map_plr1.TryGetValue(args.Code, out btn))
+                if (!Joystick.IsConnected(0) && key_map_plr1.TryGetValue(args.Code, out btn))
                 {
                     QueueLock.WaitOne();
                     keyboard_events.Enqueue(new KeyEvent(0, btn, false));
                     QueueLock.ReleaseMutex();
-                } else if (key_map_plr2.TryGetValue(args.Code, out btn))
+                } else if (!Joystick.IsConnected(1) && key_map_plr2.TryGetValue(args.Code, out btn))
                 {
                     QueueLock.WaitOne();
                     keyboard_events.Enqueue(new KeyEvent(1, btn, false));
