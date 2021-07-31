@@ -17,16 +17,15 @@ namespace SharpNES.Modules
         byte[] cpu_vram = new byte[2048];
         byte[] prg_rom;
         PPU ppu;
-        Joypad joypad1;
+        JoypadMultiplexer joypads = new JoypadMultiplexer();
         uint cycles = 0;
         static ushort RAM = 0x0000;
         static ushort RAM_MIRRORS_END = 0x1FFF;
         static ushort PPU_REGISTERS_MIRRORS_END = 0x3FFF;
 
-        Action<PPU, Joypad> gameloop_callback;
-        public Bus(Rom rom, Action<PPU, Joypad> gameloop)
+        Action<PPU, JoypadMultiplexer> gameloop_callback;
+        public Bus(Rom rom, Action<PPU, JoypadMultiplexer> gameloop)
         {
-            joypad1 = new Joypad() { strobe = false, button_index = 0, button_status = JoypadButton.NONE };
             ppu = new PPU(rom.chr_rom, rom.screen_mirroring);
             prg_rom = rom.prg_rom;
             gameloop_callback = gameloop;
@@ -39,7 +38,7 @@ namespace SharpNES.Modules
             bool nmi_after = ppu.nmi_interrupt.HasValue;
             if (!nmi_before && nmi_after)
             {
-                gameloop_callback(ppu, joypad1);
+                gameloop_callback(ppu, joypads);
             }
         }
         public byte? PollNMIStatus()
@@ -62,8 +61,8 @@ namespace SharpNES.Modules
             else if (addr == 0x2006) ppu.WriteToPPUAddr(data);
             else if (addr == 0x2007) ppu.WriteToData(data);
             else if (addr.InRange(0x4000, 0x4013) || addr == 0x4015) { } // Ignore APU
-            else if (addr == 0x4016) joypad1.Write(data);
-            else if (addr == 0x4017) { } // Ignore Joypad 2
+            else if (addr == 0x4016) joypads.Write(data);
+            else if (addr == 0x4017) { } // Ignore APU Write-Only
             else if (addr == 0x4014)
             {
                 byte[] buffer = new byte[256];
@@ -95,8 +94,8 @@ namespace SharpNES.Modules
             else if (addr == 0x2004) return ppu.ReadOAMData();
             else if (addr == 0x2007) return ppu.ReadData();
             else if (addr.InRange(0x4000, 0x4015)) return 0; // Ignore APU
-            else if (addr == 0x4016) return joypad1.Read();
-            else if (addr == 0x4017) return 0; // Ignore Joypad2
+            else if (addr == 0x4016) return joypads.Read(0);
+            else if (addr == 0x4017) return joypads.Read(1);
             else if (addr.InRange(0x2008, PPU_REGISTERS_MIRRORS_END))
             {
                 ushort mirror_down_addr = (ushort)(addr & 0b00100000_00000111);

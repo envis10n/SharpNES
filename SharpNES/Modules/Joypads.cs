@@ -53,4 +53,31 @@ namespace SharpNES.Modules
             button_status.Set(button, status);
         }
     }
+    public class JoypadMultiplexer
+    {
+        public Joypad[] ports = new Joypad[] { new Joypad(), new Joypad() };
+        public Joypad this[uint index]
+        {
+            get {
+                if (index == 2) index = 0;
+                else if (index == 3) index = 1;
+                return ports[index];
+            }
+        }
+        public byte Read(uint port)
+        {
+            return this[port].Read();
+        }
+        public void Write(byte data)
+        {
+            foreach (Joypad pad in ports)
+            {
+                pad.Write(data);
+            }
+        }
+        public void SetButtonPressed(uint port, JoypadButton button, bool status)
+        {
+            this[port].SetButtonPressedStatus(button, status);
+        }
+    }
 }

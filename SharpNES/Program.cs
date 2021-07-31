@@ -13,6 +13,7 @@ namespace SharpNES
     class Program
     {
         static float GAME_SCALE = 3.0f;
+        static float AXIS_DEADZONE = 10.0f;
         static void Render(PPU ppu, Frame frame)
         {
             ushort bg_bank = ppu.ctrl.BkndPatternAddr();
@@ -97,7 +98,38 @@ namespace SharpNES
                 oam_index -= 4;
             }
         }
-        static Dictionary<Keyboard.Key, JoypadButton> key_map = new Dictionary<Keyboard.Key, JoypadButton>()
+        /* 
+            XInput A - 0
+            XInput B - 1
+            XInput X - 2
+            XInput Y - 3
+            XInput RB - 5
+            XInput LB - 4
+            XInput RSB - 9
+            XInput LSB - 8
+            XInput Start - 7
+            XInput Select - 6
+            XInput PoVY = DPAD DOWN/UP = -100:0:100
+            XInput PoVX = DPAD LEFT/RIGHT = -100:0:100
+            XInput U = RS = UP/DOWN
+            XInput V = RS = LEFT/RIGHT
+            XInput X = LS = UP/DOWN
+            XInput Y = LS = LEFT/RIGHT
+        */
+        enum GamepadButton : uint
+        {
+            A = 0,
+            B = 1,
+            X = 2,
+            Y = 3,
+            LB = 4,
+            RB = 5,
+            SELECT = 6,
+            START = 7,
+            LSB = 8,
+            RSB = 9
+        }
+        static Dictionary<Keyboard.Key, JoypadButton> key_map_plr1 = new Dictionary<Keyboard.Key, JoypadButton>()
         {
             {Keyboard.Key.Down, JoypadButton.DOWN },
             {Keyboard.Key.Up, JoypadButton.UP },
@@ -108,12 +140,34 @@ namespace SharpNES
             {Keyboard.Key.A, JoypadButton.BUTTON_A },
             {Keyboard.Key.S, JoypadButton.BUTTON_B },
         };
+        static Dictionary<Keyboard.Key, JoypadButton> key_map_plr2 = new Dictionary<Keyboard.Key, JoypadButton>()
+        {
+            {Keyboard.Key.Numpad2, JoypadButton.DOWN },
+            {Keyboard.Key.Numpad8, JoypadButton.UP },
+            {Keyboard.Key.Numpad6, JoypadButton.RIGHT },
+            {Keyboard.Key.Numpad4, JoypadButton.LEFT },
+            {Keyboard.Key.C, JoypadButton.SELECT },
+            {Keyboard.Key.V, JoypadButton.START },
+            {Keyboard.Key.Z, JoypadButton.BUTTON_A },
+            {Keyboard.Key.X, JoypadButton.BUTTON_B },
+        };
+        static Dictionary<GamepadButton, JoypadButton> gamepad_map = new Dictionary<GamepadButton, JoypadButton>()
+        {
+            {GamepadButton.A, JoypadButton.BUTTON_A },
+            {GamepadButton.X, JoypadButton.BUTTON_B },
+            {GamepadButton.Y, JoypadButton.BUTTON_A },
+            {GamepadButton.B, JoypadButton.BUTTON_B },
+            {GamepadButton.START, JoypadButton.START },
+            {GamepadButton.SELECT, JoypadButton.SELECT },
+        };
         struct KeyEvent
         {
+            public uint index { get; }
             public bool pressed { get; }
             public JoypadButton button { get; }
-            public KeyEvent(JoypadButton button, bool pressed)
+            public KeyEvent(uint index, JoypadButton button, bool pressed)
             {
+                this.index = index;
                 this.button = button;
                 this.pressed = pressed;
             }
@@ -125,6 +179,7 @@ namespace SharpNES
                 throw new Exception("No ROM filepath provided.");
             }
             string NES_ROM_PATH = args[0];
+            Joystick.Update();
             RenderWindow window = new RenderWindow(new VideoMode(256 * (uint)GAME_SCALE, 240 * (uint)GAME_SCALE), NES_ROM_PATH);
             Texture texture = new Texture(256, 240);
             Sprite sprite = new Sprite(texture);
@@ -140,7 +195,7 @@ namespace SharpNES
 
             //keyboard_events.Enqueue(new KeyEvent(JoypadButton.UP, true));
 
-            Bus bus = new Bus(rom, (ppu, joypad1) =>
+            Bus bus = new Bus(rom, (ppu, joypads) =>
             {
                 window.Clear();
                 Render(ppu, frame);
@@ -153,33 +208,129 @@ namespace SharpNES
                 {
                     while (keyboard_events.TryDequeue(out KeyEvent ev))
                     {
-                        joypad1.SetButtonPressedStatus(ev.button, ev.pressed);
+                        joypads.SetButtonPressed(ev.index, ev.button, ev.pressed);
                     }
                 }
                 QueueLock.ReleaseMutex();
             });
 
+            window.JoystickButtonPressed += (sender, args) =>
+            {
+                GamepadButton button = (GamepadButton)args.Button;
+                if (gamepad_map.TryGetValue(button, out JoypadButton btn))
+                {
+                    QueueLock.WaitOne();
+                    keyboard_events.Enqueue(new KeyEvent(args.JoystickId, btn, true));
+                    QueueLock.ReleaseMutex();
+                }
+            };
+
+            window.JoystickButtonReleased += (sender, args) =>
+            {
+                GamepadButton button = (GamepadButton)args.Button;
+                if (gamepad_map.TryGetValue(button, out JoypadButton btn))
+                {
+                    QueueLock.WaitOne();
+                    keyboard_events.Enqueue(new KeyEvent(args.JoystickId, btn, false));
+                    QueueLock.ReleaseMutex();
+                }
+            };
+
+            Dictionary<(uint, Joystick.Axis), float> gamepad_positions = new Dictionary<(uint, Joystick.Axis), float>()
+            {
+                {(0, Joystick.Axis.PovX), 0.0f },
+                {(1, Joystick.Axis.PovX), 0.0f },
+                {(0, Joystick.Axis.PovY), 0.0f },
+                {(1, Joystick.Axis.PovY), 0.0f },
+                {(0, Joystick.Axis.X), 0.0f },
+                {(1, Joystick.Axis.X), 0.0f },
+                {(0, Joystick.Axis.Y), 0.0f },
+                {(1, Joystick.Axis.Y), 0.0f },
+            };
+
+            Dictionary<(Joystick.Axis, float), JoypadButton> gamepad_dpad_map = new Dictionary<(Joystick.Axis, float), JoypadButton>()
+            {
+                {(Joystick.Axis.PovX, 100.0f), JoypadButton.RIGHT },
+                {(Joystick.Axis.PovX, 0.0f), JoypadButton.NONE },
+                {(Joystick.Axis.PovX, -100.0f), JoypadButton.LEFT },
+                {(Joystick.Axis.PovY, 100.0f), JoypadButton.UP },
+                {(Joystick.Axis.PovY, 0.0f), JoypadButton.NONE },
+                {(Joystick.Axis.PovY, -100.0f), JoypadButton.DOWN },
+            };
+
+            window.JoystickMoved += (sender, args) =>
+            {
+                KeyEvent? ev = null;
+                var map_key = (args.JoystickId, args.Axis);
+                if (gamepad_positions.TryGetValue(map_key, out float old_position)) {
+                    switch (args.Axis)
+                    {
+                        case Joystick.Axis.PovX:
+                        case Joystick.Axis.PovY:
+                            float pos = args.Position <= AXIS_DEADZONE || args.Position >= -AXIS_DEADZONE ? 0 : args.Position > AXIS_DEADZONE ? 100 : -100;
+                            JoypadButton old_button = gamepad_dpad_map[(args.Axis, old_position)];
+                            JoypadButton new_button = gamepad_dpad_map[(args.Axis, pos)];
+                            if (old_button == JoypadButton.NONE && new_button != JoypadButton.NONE)
+                            {
+                                // Pressed
+                                ev = new KeyEvent(args.JoystickId, new_button, true);
+                            } else
+                            {
+                                // Released
+                                ev = new KeyEvent(args.JoystickId, old_button, false);
+                            }
+                            gamepad_positions[map_key] = pos;
+                            break;
+                        case Joystick.Axis.X:
+                            // UP/DOWN
+                            break;
+                        case Joystick.Axis.Y:
+                            // LEFT/RIGHT
+                            break;
+                    }
+                }
+                if (ev.HasValue)
+                {
+                    QueueLock.WaitOne();
+                    keyboard_events.Enqueue(ev.Value);
+                    QueueLock.ReleaseMutex();
+                }
+            };
+
             window.KeyPressed += (sender, args) =>
             {
+                JoypadButton btn;
                 if (args.Code == Keyboard.Key.Escape)
                 {
                     window.Close();
                     Environment.Exit(0);
                 }
-                else if (key_map.TryGetValue(args.Code, out JoypadButton btn))
+                else if (key_map_plr1.TryGetValue(args.Code, out btn))
                 {
                     QueueLock.WaitOne();
-                    keyboard_events.Enqueue(new KeyEvent(btn, true));
+                    keyboard_events.Enqueue(new KeyEvent(0, btn, true));
+                    QueueLock.ReleaseMutex();
+                }
+                else if (key_map_plr2.TryGetValue(args.Code, out btn))
+                {
+                    QueueLock.WaitOne();
+                    keyboard_events.Enqueue(new KeyEvent(1, btn, true));
                     QueueLock.ReleaseMutex();
                 }
             };
 
             window.KeyReleased += (sender, args) =>
             {
-                if (key_map.TryGetValue(args.Code, out JoypadButton btn))
+                JoypadButton btn;
+                if (key_map_plr1.TryGetValue(args.Code, out btn))
                 {
                     QueueLock.WaitOne();
-                    keyboard_events.Enqueue(new KeyEvent(btn, false));
+                    keyboard_events.Enqueue(new KeyEvent(0, btn, false));
+                    QueueLock.ReleaseMutex();
+                } else if (key_map_plr2.TryGetValue(args.Code, out btn))
+                {
+                    QueueLock.WaitOne();
+                    keyboard_events.Enqueue(new KeyEvent(1, btn, false));
                     QueueLock.ReleaseMutex();
                 }
             };
