@@ -193,8 +193,6 @@ namespace SharpNES
 
             Frame frame = Frame.New();
 
-            //keyboard_events.Enqueue(new KeyEvent(JoypadButton.UP, true));
-
             Bus bus = new Bus(rom, (ppu, joypads) =>
             {
                 window.Clear();
@@ -213,6 +211,10 @@ namespace SharpNES
                 }
                 QueueLock.ReleaseMutex();
             });
+
+            // Connect joypads.
+            bus.SetJoypadConnected(0, true);
+            bus.SetJoypadConnected(1, true);
 
             window.JoystickButtonPressed += (sender, args) =>
             {
